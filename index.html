@@ -1,0 +1,223 @@
+<html lang = "en"> 
+   <head> 
+      <meta charset = "utf-8" />
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">   
+   </head>
+   <body> 
+      <nav class="navbar navbar-default">
+        <div class="container-fluid">
+          <div class="navbar-header">
+            <a class="navbar-brand" href="#">
+               WebRTC Basic Setup <small> - By Cowboy Coder</small>
+            </a>
+          </div>
+        </div>
+      </nav>
+      <div class="row">
+         <div class="col-xs-12 col-sm-4 col-sm-offset-4 col-md-4 col-md-offset-4">
+            <div class="row" id="init" style="display:block">
+               <div id="login" style="display:block"> 
+                  <h3>Login</h3>
+                  <hr>
+                  <br>
+                   <div class="input-group">
+                     <input type="text" class="form-control" placeholder="Username..." id = "loginInput" >
+                     <span class="input-group-btn">
+                       <button class="btn btn-default" type="button" id = "loginBtn" onclick="login()">Go!</button>
+                     </span>
+                   </div>
+               </div> 
+               <div id="connect" style="display:none">
+                  <h3>Connect</h3>
+                  <hr> 
+                  <div class="input-group">
+                     <input type="text" class="form-control" placeholder="Username..." id = "otherUsernameInput" >
+                     <span class="input-group-btn">
+                       <button class="btn btn-default" type="button" id = "connectToOtherUsernameBtn" onclick="connect()">Go!</button>
+                     </span>
+                  </div>     
+                  <hr>
+                  Connected as : <span id="username"></span>
+               </div>
+            </div>  
+
+            <div class="row" id="connected" style="display:none">
+               <p>Connected</p><hr>
+               <div class="row">
+                  <div class="col-md-9">
+                     <video id="v1" height="240" width="320" autoplay></video>
+                  </div>
+                  <div class="col-md-3">
+                     <video id="v2" height="60" width="80" autoplay></video> 
+                  </div>
+               </div>
+               <hr>
+               <div class="row">
+                  Username: <span id="usernamee"></span><br>
+                  Connected to : <span id="otherusername"></span>
+               </div>
+               <hr>
+            </div>
+         </div>
+      </div>  
+      <script>
+            var connection = new WebSocket('ws://localhost:9090'); 
+            var name = ""; 
+            var loginInput = document.querySelector('#loginInput'); 
+            var loginBtn = document.querySelector('#loginBtn'); 
+            var otherUsernameInput = document.querySelector('#otherUsernameInput'); 
+            var connectToOtherUsernameBtn = document.querySelector('#connectToOtherUsernameBtn'); 
+            var msgInput = document.querySelector('#msgInput'); 
+            var sendMsgBtn = document.querySelector('#sendMsgBtn'); 
+            var connectedUser, myConnection, dataChannel;         
+            var configuration = { 
+               "iceServers": [{ "url": "stun:stun.1.google.com:19302" }] 
+            }; 
+            myConnection = new webkitRTCPeerConnection(configuration); 
+            //myConnection = new webkitRTCPeerConnection(configuration, {optional: [{RtpDataChannels: true}]}); 
+            console.log("RTCPeerConnection object was created");
+            //setup ice handling
+            //when the browser finds an ice candidate we send it to another peer 
+
+            function hasUserMedia() { 
+               //check if the browser supports the WebRTC 
+               return !!(navigator.getUserMedia || navigator.webkitGetUserMedia || 
+                  navigator.mozGetUserMedia); 
+            };
+            if (hasUserMedia()) { 
+               navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia; 
+               //enabling video and audio channels 
+               navigator.getUserMedia({ video: true, audio: true }, function (stream) { 
+                  v2.src = window.URL.createObjectURL(stream); 
+                  myConnection.addStream(stream);
+               }, function (err) {}); 
+            } else { 
+               alert("WebRTC is not supported"); 
+            }
+
+            myConnection.onaddstream = function(e) {
+               document.getElementById("connected").style.display="block";
+               document.getElementById("init").style.display="none";
+               v1.src = window.URL.createObjectURL(e.stream);
+               document.getElementById("otherusername").innerHTML = otherUsernameInput.value;
+               document.getElementById("usernamee").innerHTML = loginInput.value;
+            }
+            myConnection.onicecandidate = function (event) {
+               console.log("Event Triggered");
+               if (event.candidate) { 
+                  console.log("Sending ICE Candidate to peer");
+                  send({ 
+                     type: "candidate", 
+                     candidate: event.candidate 
+                  }); 
+               } 
+            };           
+            //handle messages from the server 
+            connection.onmessage = function (message) { 
+               console.log("Got message", message.data);
+               var data = JSON.parse(message.data);
+               switch(data.type) { 
+                  case "login": 
+                     onLogin(data.success); 
+                     break; 
+                  case "offer": 
+                     onOffer(data.offer, data.name); 
+                     break; 
+                  case "answer": 
+                     onAnswer(data.answer); 
+                     break; 
+                  case "candidate": 
+                     onCandidate(data.candidate); 
+                     break; 
+                  default: 
+                     break; 
+               } 
+            };
+
+            // Login
+            function login(){
+                name = loginInput.value; 
+                if(name.length > 0){ 
+                  console.log("Contacting Signalling Server for login");
+                  send({ 
+                     type: "login", 
+                     name: name 
+                  }); 
+               };              
+            }     
+            //when a user logs in 
+            function onLogin(success) { 
+               if(success == true){
+                  document.getElementById("connect").style.display="block";
+                  document.getElementById("login").style.display="none";
+                  document.getElementById("username").innerHTML = loginInput.value;
+               }else{
+                  alert("Login Failed");
+               }
+            };
+            connection.onopen = function () { 
+               console.log("Connected"); 
+            };
+            connection.onerror = function (err) { 
+               console.log("Got error", err); 
+            };
+              
+
+
+            //################################################################
+            //setup a peer connection with another user 
+            //################################################################
+            function connect(){
+               var otherUsername = otherUsernameInput.value;
+               connectedUser = otherUsername;
+               if (otherUsername.length > 0) { 
+                  myConnection.createOffer(function (offer) { 
+                     send({ 
+                        type: "offer", 
+                        offer: offer 
+                     }); 
+                     myConnection.setLocalDescription(offer); 
+                  }, function (error) { 
+                     alert("An error has occurred."); 
+                  }); 
+               }           
+            };
+            //when somebody wants to call us 
+            function onOffer(offer, name) { 
+               connectedUser = name; 
+               //offerOptions = {'offerToReceiveAudio':true,'offerToReceiveVideo':true};
+               myConnection.setRemoteDescription(new RTCSessionDescription(offer));
+               myConnection.createAnswer(function (answer) { 
+                  myConnection.setLocalDescription(answer); 
+                  
+                  send({ 
+                     type: "answer", 
+                     answer: answer 
+                  }); 
+                  
+               }, function (error) { 
+                  alert("oops...error"); 
+               }); 
+            }
+
+            //when another user answers to our offer 
+            function onAnswer(answer) { 
+               myConnection.setRemoteDescription(new RTCSessionDescription(answer)); 
+            }
+            //when we got ice candidate from another user 
+            function onCandidate(candidate) { 
+               console.log("Setting RTCICECandidadate");
+               myConnection.addIceCandidate(new RTCIceCandidate(candidate)); 
+            }
+            //#############################################
+            // Alias for sending messages in JSON format 
+            function send(message) {
+               if (connectedUser) { 
+                  message.name = connectedUser; 
+               } 
+               connection.send(JSON.stringify(message)); 
+            };   
+      </script>
+   </body>
+	
+</html>
