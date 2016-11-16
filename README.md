@@ -12,4 +12,4 @@ Start Chrome with the switch
 
 --allow-running-insecure-content
 
-Use HTTPS certificates while hosting to ensure that it works.
+Use SSL/TLS certificates while hosting to ensure that it works.
