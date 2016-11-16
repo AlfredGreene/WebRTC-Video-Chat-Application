@@ -2,7 +2,7 @@
 
 A P2P Video Chat Application powered by WebRTC.
 
-Comonents Include:
+Components Include:
 
 1. index.html is the chat client application built with Angular JS.You can use apache to host it locally.
 2. signalling_server.js is the signalling server file used to detect the peers and exchange session descriptions for initial handshake.
